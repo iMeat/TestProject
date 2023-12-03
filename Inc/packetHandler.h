@@ -9,25 +9,18 @@
 
 
 //typedef section ==============================================================
-
 //method of clent subscribings to getting data from server
 typedef enum {INDICATION = 0x02,
 							NOTIFICATION = 0x01} notificationType_t;
-
 //device role
-//typedef enum {CLIENT = 0,
-//							SERVER} cltOrServer_t;
 typedef enum {CLIENTS = 0,
 							SERVERS} cltOrServer_t;
-
-
 //client states for FSM
 typedef enum {CLT_WAIT_INDICATION = 0,	//for indication
 							CLT_SEND_CONFIRMATION,		//for indication
 							CLT_WAIT_NOTIFICATION,		//for notification
 							CLT_RX_DONE								//for indication and confirmation
 							} cltState_t;
-
 //server states for FSM
 typedef enum {SRV_IDLE = 0,
 							SRV_START_INDICATION,			//for indication
@@ -36,7 +29,6 @@ typedef enum {SRV_IDLE = 0,
 							SRV_START_NOTIFICATION,		//for notification
 							SRV_LOCK_NOTIFICATION			//for notification
 							} srvState_t;
-
 //struct for server
 typedef struct
 {
@@ -54,7 +46,7 @@ typedef struct
 typedef struct
 {
 	uint8_t *rxDataBufferBase; //USED
-//	uint8_t rxBufferSize; //USED
+	//	uint8_t rxBufferSize; //USED
 	uint8_t rxDoneFlag;
 } rxData_t;
 
@@ -67,8 +59,7 @@ typedef struct
 	void (*cltReceptionDoneCb)(void);	//USED
 	void (*srvTransmissionDoneCb)(void);//USED
 }packetHandlerSettings_t;
-
-
+//for statistic
 typedef struct
 	{
 	uint32_t packetTime;
@@ -100,7 +91,8 @@ void PacketHandlerInit(uint16_t connHandle,
 											 uint8_t *rxBuffer);
 
 //server --- send packet
-uint8_t PacketHandlerSend(uint8_t *txDataBase,
+uint8_t PacketHandlerSend(packetHandlerSettings_t *packetHandlerSettings,
+													uint8_t *txDataBase,
 													uint16_t dataSize,
 													uint16_t payloadSize);
 
