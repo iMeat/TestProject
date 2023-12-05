@@ -698,7 +698,7 @@ void StateMachine(state_machine_t *current_state)
 					//
 					packetHandlerSettings_t settings;
 					settings.cltOrSrv = CLIENTS;
-					settings.notificationType = NOTIFICATION;
+					settings.notificationType = INDICATION;
 					PacketHandlerInit(connDevList.connDev[0].connectionHandle,
 														NULL,
 														settings.cltOrSrv,

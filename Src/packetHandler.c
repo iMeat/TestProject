@@ -38,8 +38,14 @@ statisticData_t packetHandlerRxStatistic;
 
 //local function section
 void PacketHandlerPackDataPacket(uint8_t *payload, uint32_t time);
+
+void PacketHandlerIndicationSrvFSM(void);
+void PacketHandlerIndicationCltFSM(void);
 void PacketHandlerNotificationSrvFSM(void);
 void PacketHandlerNotificationCltFSM(void);
+
+
+
 
 //==============================================================================
 void PacketHandlerInit(uint16_t connHandle,
@@ -124,12 +130,12 @@ void PacketHandler(void)
 		//========== INDICATION --- SERVER
 		if(packetHandlerSettings.cltOrSrv == SERVERS)
 		{
-			
+		PacketHandlerIndicationSrvFSM();	
 		}
 		//========== INDICATION --- CLIENT
 		else 
 		{
-			
+		PacketHandlerIndicationCltFSM();	
 		}
 	}
 }
@@ -440,10 +446,14 @@ void PacketHandlerIndicationSrvFSM(void)
 	//==========
 	if(srvState == SRV_START_INDICATION)
 	{
+#ifdef DEBUGGING
+			printf("SRV_START INDICATION\r\n");
+#endif	//DEBUGGING				
 		//all packets has been transmitted - go to SRV_TX_DONE
 		if(txData.txPacketCounter > txData.txPacketQuantity)//last packet !!!!	
 		{
 			srvState = SRV_TX_DONE;
+
 			return;
 		}
 		//calculate new data offset for sending
@@ -509,11 +519,17 @@ void PacketHandlerIndicationSrvFSM(void)
 	//==========
 	if(srvState == SRV_WAIT_CONFIRMATION)
 	{
+#ifdef DEBUGGING
+		printf("SRV_WAINT_CONFIRMATION\r\n");
+#endif	//DEBUGGING	
 		return;//wait confirmation event from client to unlock next indication
 	}
 	//==========
 	if(srvState == SRV_TX_DONE)
 	{
+#ifdef DEBUGGING
+		printf("SRV_TX_DONE\r\n");
+#endif	//DEBUGGING	
 		txData.txPacketCounter = 0;
 		// issue the done function
 		if(packetHandlerSettings.srvTransmissionDoneCb != NULL)
