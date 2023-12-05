@@ -72,6 +72,8 @@ void PacketHandlerInit(uint16_t connHandle,
 	{
 		cltState = CLT_WAIT_INDICATION;
 	}
+
+	
 }
 //==============================================================================
 uint8_t PacketHandlerSend(packetHandlerSettings_t *packetHandlerSettings,
@@ -261,7 +263,7 @@ void aci_gatt_clt_indication_event(uint16_t Connection_Handle,
 																	Attribute_Value,
 																	rxData.rxDataBufferBase);
 		//send confirmation of recept of indication
-		aci_gatt_clt_confirm_indication(packetHandlerSettings.characteristicHandle);
+		aci_gatt_clt_confirm_indication(packetHandlerSettings.connectionHandle);
 		//check hte complition of message reception
 		if(rxData.rxDoneFlag == 1)
 		{
@@ -445,10 +447,7 @@ void PacketHandlerIndicationSrvFSM(void)
 	}
 	//==========
 	if(srvState == SRV_START_INDICATION)
-	{
-#ifdef DEBUGGING
-			printf("SRV_START INDICATION\r\n");
-#endif	//DEBUGGING				
+	{			
 		//all packets has been transmitted - go to SRV_TX_DONE
 		if(txData.txPacketCounter > txData.txPacketQuantity)//last packet !!!!	
 		{
@@ -514,14 +513,15 @@ void PacketHandlerIndicationSrvFSM(void)
 			txData.txPacketCounter++;
 			//stay in  SRV_START_NOTIFICATION state for new packet transmisson
 			srvState = SRV_WAIT_CONFIRMATION;
-		}		
+		}
+		else
+		{
+			printf("Function: aci_gatt_srv_notify() Status code: 0x%02x\r\n",status);
+		}
 	}
 	//==========
 	if(srvState == SRV_WAIT_CONFIRMATION)
 	{
-#ifdef DEBUGGING
-		printf("SRV_WAINT_CONFIRMATION\r\n");
-#endif	//DEBUGGING	
 		return;//wait confirmation event from client to unlock next indication
 	}
 	//==========

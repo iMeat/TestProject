@@ -45,8 +45,8 @@ NO_INIT(uint32_t dyn_alloc_a[DYNAMIC_MEMORY_SIZE>>2]);
 //#define CONN_INTERVAL_MAX   ((uint16_t)(6/1.25))       // 20 ms to 10
 //#define CONN_INTERVAL_MIN   ((uint16_t)(7.5/1.25))       // 20 ms to 10
 //#define CONN_INTERVAL_MAX   ((uint16_t)(7.5/1.25))       // 20 ms to 10
-#define CONN_INTERVAL_MIN   ((uint16_t)(15.0/1.25))       // 15ms for 1M
-#define CONN_INTERVAL_MAX   ((uint16_t)(15.0/1.25))       // 15ms for 1M
+#define CONN_INTERVAL_MIN   ((uint16_t)(10.0/1.25))       // 15ms for 1M
+#define CONN_INTERVAL_MAX   ((uint16_t)(10.0/1.25))       // 15ms for 1M
 
 
 #define SUPERVISION_TIMEOUT ((uint16_t)(100/10))       // 1000 ms
@@ -500,8 +500,8 @@ void StateMachine(state_machine_t *current_state)
 				firstEntryToState = 0;
 				printf("State = CONNECTED\r\n");
 				connDevListPrint(&connDevList);
-				state = READ_PRIMARY_SERVICE;
-//				state = FEAT_EXCHANGE;				
+//				state = READ_PRIMARY_SERVICE;
+				state = FEAT_EXCHANGE;				
 				firstEntryToState = 1;		
 			}
 			break;
@@ -511,7 +511,7 @@ void StateMachine(state_machine_t *current_state)
 		{
 			if(firstEntryToState == 1)
 			{
-				firstEntryToState = 0;
+//				firstEntryToState = 0;
 				printf("State = FEAT_EXCHANGE\r\n");
 				uint8_t status;
 				status = hci_le_read_remote_used_features(connDevList.connDev[0].
@@ -524,8 +524,13 @@ void StateMachine(state_machine_t *current_state)
 				else
 				{
 					printf("Status: OK\r\n");
+					state = SET_DATA_LENGHT;				
+					firstEntryToState = 1;		
 				}
 			}
+			
+			
+			
 			if(featureExchangedFlag == 1)
 			{
 			featureExchangedFlag = 0;
@@ -535,14 +540,12 @@ void StateMachine(state_machine_t *current_state)
 			break;
 		}
 		
-		
-		
-		
 		//=========		
 	case SET_DATA_LENGHT:
 		{
 			if(firstEntryToState == 1)
 			{
+				printf("State = SET_DATA_LENGHT\r\n");
 				firstEntryToState = 0;
 				uint8_t status;
 				status = hci_le_set_data_length(connDevList.connDev[0].
@@ -1088,8 +1091,8 @@ void GetNotification(void)
 {
 	uint8_t status;
 	//indication
-	uint8_t data[] = {0x01,0x00};//{0x01,0x00} notificaation
-//	uint8_t data[] = {0x02,0x00};//{0x01,0x00} indication
+//uint8_t data[] = {0x01,0x00};//{0x01,0x00} notificaation
+	uint8_t data[] = {0x02,0x00};//{0x02,0x00} indication
 	status =  aci_gatt_clt_write(connDevList.connDev[0].connectionHandle,
 															 0x013,// TX_Handle = 0x0011 + 2 offset to 0x0013 (UUID = 0x2902 CCC)
 															 2,// 2 bytes
