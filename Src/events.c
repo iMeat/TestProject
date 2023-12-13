@@ -2,7 +2,9 @@
 #include "main.h"
 
 #define DISABLE_PRINTF
-#define USE_EVENTS_FROM_PACKET_HANDLER	
+#define USE_EVENTS_FROM_PACKET_HANDLER
+
+#define EVENTS_C_DEBUGGING
 
 	extern list_t scanList;
 	extern state_machine_t state;
@@ -12,6 +14,8 @@
 	extern uint8_t firstEntryToState;
 	extern uint8_t readDoneFlag;
 	extern uint8_t testBuffer[];
+	extern uint8_t rssiTestNr;
+	extern uint8_t packetTestNr;
 	
 	uint8_t eventArray[1000];
 	uint16_t eventArrayP = 0;
@@ -21,6 +25,7 @@ void hci_le_extended_advertising_report_event(uint8_t num_reports,
 																							Extended_Advertising_Report_t extended_advertising_report[])
 {
 	uint16_t eventType = extended_advertising_report[0].Event_Type;
+
 	printf("====Function: hci_le_ectended_advertising_report_event() Data come\r\n");
 	printf("NumReport: %02d\r\n", num_reports);
 	printf("EventType: 0x%04x\r\n", eventType);
@@ -234,13 +239,16 @@ void aci_gap_proc_complete_event(uint8_t Procedure_Code,
                                  uint8_t Data_Length,
                                  uint8_t Data[])
 	{
+#ifdef EVENTS_C_DEBUGGING
 		printf("====Function begin: acie_gap_proc_complete_event()\r\n");
 		printf("Procedure code: 0x%02x \r\n",Procedure_Code);
+
 		if(Procedure_Code == GAP_NAME_DISCOVERY_PROC)
 		{
 			printf("GAP_NAME_DISCOVERY_PROC\r\n");
 		}
 		printf("====Function end: acie_gap_proc_complete_event()\r\n");
+#endif //EVENTS_C_DEBUGGING		
 	}
 //==============================================================================
 void aci_att_clt_read_by_group_type_resp_event(uint16_t Connection_Handle,

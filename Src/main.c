@@ -53,8 +53,8 @@ NO_INIT(uint32_t dyn_alloc_a[DYNAMIC_MEMORY_SIZE>>2]);
 //#define CE_LENGTH           ((uint16_t)(10/0.625))      // 20 ms to 10
 //#define CE_LENGTH           ((uint16_t)(2/0.625))      // 20 ms to 10
 #define CE_LENGTH           ((uint16_t)(200))      // 20 ms to 10
-#define CE_LENGTH_MIN				((uint16_t)(200)) 
-#define CE_LENGTH_MAX				((uint16_t)(200)) 
+#define CE_LENGTH_MIN				((uint16_t)(2)) 
+#define CE_LENGTH_MAX				((uint16_t)(64)) 
 #define SLAVE_LATENCY				0
 #define ACI_GAP_CONNECTION //connecton method
 #define RX_BUFFER_SIZE			33000
@@ -119,22 +119,23 @@ NO_INIT(uint32_t dyn_alloc_a[DYNAMIC_MEMORY_SIZE>>2]);
 	uint8_t testBuffer[1000];
 	uint16_t packetCounter = 0;
 	
-	uint8_t phRxBuffer[33000];
+	uint8_t phRxBuffer[RX_BUFFER_SIZE];
 	llc_conn_per_statistic_st statisticPerConnection;
 	allTimeStatistic_t allTimeStatistic;
-	
+	uint8_t rssiTestNr = 0;
+	uint8_t dataTestNr = 0;
 	//printBusy = 0;
 	
 //==============================================================================
 //sysTick memory for programm timer
 
 uint32_t sysTickMem;
-void receptionDataDone(void);
+void receptionDataDone(uint32_t rxdataSize);
 
 //void ScanListUpdate(scanRecord_t *s, Extended_Advertising_Report_t extended_advertising_report[]);
 //void ScanListPrint(scanRecord_t *s);
-
-
+void TestRSSI(void);
+void TestDataReceived(void);
 
 //==============================================================================
 void main (void)
@@ -158,8 +159,8 @@ if (SystemInit(SYSCLK_64M, BLE_SYSCLK_32M) != SUCCESS)
   /* Init Clock */
   Clock_Init();
   /* Configure I/O communication channel */
-	  BSP_COM_Init(comPortRead);
-		BufferInit();
+	BSP_COM_Init(comPortRead);
+	BufferInit();
 
 	//Initialize Virtual Timer (many sw timers based on one hw timer)
   //HS_STARTUP_TIME = 780uS, INITIAL_CALIBRATION = FALSE, CALIBRATION_INTERVAL =v0
@@ -178,7 +179,6 @@ if (SystemInit(SYSCLK_64M, BLE_SYSCLK_32M) != SUCCESS)
   }
   /* Init the AES block */
   AESMGR_Init();
-		
   /* BlueNRG-LP stack init */
   ret = BLE_STACK_Init(&BLE_STACK_InitParams);
   if (ret != BLE_STATUS_SUCCESS) {
@@ -230,48 +230,62 @@ if (SystemInit(SYSCLK_64M, BLE_SYSCLK_32M) != SUCCESS)
     .user_fifo_size = USER_FIFO_SIZE 
 */	
 //PB0 --- Indication event and confirmation send
-		LL_AHB_EnableClock(LL_AHB_PERIPH_GPIOB);
-		LL_GPIO_SetPinMode(GPIOB, GPIO_BSRR_BS0, LL_GPIO_MODE_OUTPUT);
-		LL_GPIO_SetPinSpeed(GPIOB, GPIO_BSRR_BS0, LL_GPIO_SPEED_FREQ_HIGH);
-		LL_GPIO_SetPinOutputType(GPIOB, GPIO_BSRR_BS0, LL_GPIO_OUTPUT_PUSHPULL);
+	LL_AHB_EnableClock(LL_AHB_PERIPH_GPIOB);
+	LL_GPIO_SetPinMode(GPIOB, GPIO_BSRR_BS0, LL_GPIO_MODE_OUTPUT);
+	LL_GPIO_SetPinSpeed(GPIOB, GPIO_BSRR_BS0, LL_GPIO_SPEED_FREQ_HIGH);
+	LL_GPIO_SetPinOutputType(GPIOB, GPIO_BSRR_BS0, LL_GPIO_OUTPUT_PUSHPULL);
 		
 //PA13 --- Read data from buffer
-		LL_AHB_EnableClock(LL_AHB_PERIPH_GPIOA);
-		LL_GPIO_SetPinMode(GPIOA, GPIO_BSRR_BS13, LL_GPIO_MODE_OUTPUT);
-		LL_GPIO_SetPinSpeed(GPIOA, GPIO_BSRR_BS13, LL_GPIO_SPEED_FREQ_HIGH);
-		LL_GPIO_SetPinOutputType(GPIOB, GPIO_BSRR_BS13, LL_GPIO_OUTPUT_PUSHPULL);
-		
+	LL_AHB_EnableClock(LL_AHB_PERIPH_GPIOA);
+	LL_GPIO_SetPinMode(GPIOA, GPIO_BSRR_BS13, LL_GPIO_MODE_OUTPUT);
+	LL_GPIO_SetPinSpeed(GPIOA, GPIO_BSRR_BS13, LL_GPIO_SPEED_FREQ_HIGH);
+	LL_GPIO_SetPinOutputType(GPIOA, GPIO_BSRR_BS13, LL_GPIO_OUTPUT_PUSHPULL);
+#define PA13_HIGH()	LL_GPIO_WriteOutputPin(GPIOA, GPIO_BSRR_BS13, LL_GPIO_OUTPUT_HIGH)
+#define PA13_LOW()	LL_GPIO_WriteOutputPin(GPIOA, GPIO_BSRR_BS13, LL_GPIO_OUTPUT_LOW)		
 //PA1 --- 
-		LL_AHB_EnableClock(LL_AHB_PERIPH_GPIOA);
-		LL_GPIO_SetPinMode(GPIOA, GPIO_BSRR_BS1, LL_GPIO_MODE_OUTPUT);
-		LL_GPIO_SetPinSpeed(GPIOA, GPIO_BSRR_BS1, LL_GPIO_SPEED_FREQ_HIGH);
-		LL_GPIO_SetPinOutputType(GPIOA, GPIO_BSRR_BS1, LL_GPIO_OUTPUT_PUSHPULL);				
+	LL_AHB_EnableClock(LL_AHB_PERIPH_GPIOA);
+	LL_GPIO_SetPinMode(GPIOA, GPIO_BSRR_BS1, LL_GPIO_MODE_OUTPUT);
+	LL_GPIO_SetPinSpeed(GPIOA, GPIO_BSRR_BS1, LL_GPIO_SPEED_FREQ_HIGH);
+	LL_GPIO_SetPinOutputType(GPIOA, GPIO_BSRR_BS1, LL_GPIO_OUTPUT_PUSHPULL);
+#define PA1_HIGH() LL_GPIO_WriteOutputPin(GPIOA, GPIO_BSRR_BS1, LL_GPIO_OUTPUT_HIGH)
+#define PA1_LOW() LL_GPIO_WriteOutputPin(GPIOA, GPIO_BSRR_BS1, LL_GPIO_OUTPUT_LOW)
 
 //LED		
 //PA6 --- BLUE
-		LL_AHB_EnableClock(LL_AHB_PERIPH_GPIOA);
-		LL_GPIO_SetPinMode(GPIOA, GPIO_BSRR_BS6, LL_GPIO_MODE_OUTPUT);
-		LL_GPIO_SetPinSpeed(GPIOA, GPIO_BSRR_BS6, LL_GPIO_SPEED_FREQ_HIGH);
-		LL_GPIO_SetPinOutputType(GPIOA, GPIO_BSRR_BS6, LL_GPIO_OUTPUT_PUSHPULL);
-		
-		LL_GPIO_WriteOutputPin(GPIOA, GPIO_BSRR_BS6, LL_GPIO_OUTPUT_HIGH);
+	LL_AHB_EnableClock(LL_AHB_PERIPH_GPIOA);
+	LL_GPIO_SetPinMode(GPIOA, GPIO_BSRR_BS6, LL_GPIO_MODE_OUTPUT);
+	LL_GPIO_SetPinSpeed(GPIOA, GPIO_BSRR_BS6, LL_GPIO_SPEED_FREQ_HIGH);
+	LL_GPIO_SetPinOutputType(GPIOA, GPIO_BSRR_BS6, LL_GPIO_OUTPUT_PUSHPULL);	
+	LL_GPIO_WriteOutputPin(GPIOA, GPIO_BSRR_BS6, LL_GPIO_OUTPUT_HIGH);
 //PB8 --- GREEN
 		LL_AHB_EnableClock(LL_AHB_PERIPH_GPIOB);
 		LL_GPIO_SetPinMode(GPIOB, GPIO_BSRR_BS8, LL_GPIO_MODE_OUTPUT);
 		LL_GPIO_SetPinSpeed(GPIOB, GPIO_BSRR_BS8, LL_GPIO_SPEED_FREQ_HIGH);
 		LL_GPIO_SetPinOutputType(GPIOB, GPIO_BSRR_BS8, LL_GPIO_OUTPUT_PUSHPULL);
-		
 		LL_GPIO_WriteOutputPin(GPIOB, GPIO_BSRR_BS8, LL_GPIO_OUTPUT_HIGH);		
 //PB9 --- RED
 		LL_AHB_EnableClock(LL_AHB_PERIPH_GPIOB);
 		LL_GPIO_SetPinMode(GPIOB, GPIO_BSRR_BS9, LL_GPIO_MODE_OUTPUT);
 		LL_GPIO_SetPinSpeed(GPIOB, GPIO_BSRR_BS9, LL_GPIO_SPEED_FREQ_HIGH);
 		LL_GPIO_SetPinOutputType(GPIOB, GPIO_BSRR_BS9, LL_GPIO_OUTPUT_PUSHPULL);
-		
 		LL_GPIO_WriteOutputPin(GPIOB, GPIO_BSRR_BS9, LL_GPIO_OUTPUT_HIGH);			
 		
 		LED_GREEN_OFF();
 		LED_RED_ON();
+	//Set TX power	
+	uint8_t status;
+	status = aci_hal_set_tx_power_level(1, 21);//ZAO it was 0,24
+	if(status != BLE_STATUS_SUCCESS)
+	{
+		printf("====Function: aci_hal_set_tx_power_level(1, 21)\r\n");
+		printf("return error code: 0x%02x\r\n", status);		
+	}
+	else
+	{
+		printf("====Function: aci_hal_set_tx_power_level(1, 21)\r\n");
+		printf("return OK\r\n");			
+	}
+		
   //Initialize Bluetooth Controller
   BLECNTR_InitGlobal();
 	//
@@ -283,7 +297,6 @@ if (SystemInit(SYSCLK_64M, BLE_SYSCLK_32M) != SUCCESS)
 //	ScanListInit(&scanList[1]);
 	ScanListInit(&scanList);
 //ZAO - start test section
-	uint8_t status;
 	uint16_t suggestedMaxTxOctets = 251;// bytes
 	uint16_t suggestedMaxTxTime = (251 + 14)*8;//microsecunds
 	status = hci_le_write_suggested_default_data_length(suggestedMaxTxOctets,
@@ -297,12 +310,26 @@ if (SystemInit(SYSCLK_64M, BLE_SYSCLK_32M) != SUCCESS)
 	{
 		printf("====Function: hci_le_write_suggested_default_data_length()\r\n");
 		printf("return OK\r\n");
-		
+	}	
+		status = hci_le_read_suggested_default_data_length(&suggestedMaxTxOctets,
+																										 &suggestedMaxTxTime);
+	if(status != BLE_STATUS_SUCCESS)
+	{
+		printf("==== Function: hci_le_read_suggested_default_data_length()\r\n");
+		printf("return error code: 0x%02x\r\n", status);		
+	}
+	else 
+	{
+		printf("====Function: hci_le_read_suggested_default_data_length()\r\n");
+		printf("return OK\r\n");
+		printf("SuggestedMaxTxOctets:%05d octets\r\n", suggestedMaxTxOctets);
+		printf("suggestedMaxTxTime:%05d ms\r\n", suggestedMaxTxTime);
+	}
+	
 		uint16_t supportedMaxTxOctets = 0;
 		uint16_t supportedMaxTxTime = 0;
 		uint16_t supportedMaxRxOctets = 0;
 		uint16_t supportedMaxRxTime = 0;
-		
 		status = hci_le_read_maximum_data_length(&supportedMaxTxOctets,
 																				&supportedMaxTxTime,
 																				&supportedMaxRxOctets,
@@ -315,16 +342,12 @@ if (SystemInit(SYSCLK_64M, BLE_SYSCLK_32M) != SUCCESS)
 		else
 		{
 			printf("====Function: hci_le_read_maximum_data_length()\r\n");
-			printf("MaxTxOctets:%03d, maxTxTime:%05d, maxRxOctets:%03d, maxRxTime:%05d\r\n",
-						 supportedMaxTxOctets,
-						 supportedMaxTxTime,
-						 supportedMaxRxOctets,
-						 supportedMaxRxTime);
+			printf("MaxTxOctets:%03d octets\r\n",supportedMaxTxOctets);
+			printf("SupportedMaxTxTime:%05d ms\r\n",supportedMaxTxTime);
+			printf("SupportedMaxRxOctets:%03d octets\r\n",supportedMaxRxOctets);			
+			printf("maxRxTime:%05d\r\n ms\r\n",supportedMaxRxTime);			
 		}
 																				
-		
-		
-	}
 //ZAO - end test section	
 	
 //==============================================================================	
@@ -1126,7 +1149,7 @@ void ReadDataFromBufferToBuffer(uint8_t *sourceBuffer,
 																	 uint8_t *destinationBuffer,
 																	 uint16_t Lenght)
 {
-LL_GPIO_WriteOutputPin(GPIOA, GPIO_BSRR_BS13, LL_GPIO_OUTPUT_HIGH);	
+//LL_GPIO_WriteOutputPin(GPIOA, GPIO_BSRR_BS13, LL_GPIO_OUTPUT_HIGH);	
 	for(uint16_t i = 0; i < Lenght; i++)
 		{
 			destinationBuffer[i] = sourceBuffer[i];
@@ -1146,16 +1169,48 @@ LL_GPIO_WriteOutputPin(GPIOA, GPIO_BSRR_BS13, LL_GPIO_OUTPUT_HIGH);
 //								 txPHY,rxPHY);	
 //				}
 
-LL_GPIO_WriteOutputPin(GPIOA, GPIO_BSRR_BS13, LL_GPIO_OUTPUT_LOW);	
+//LL_GPIO_WriteOutputPin(GPIOA, GPIO_BSRR_BS13, LL_GPIO_OUTPUT_LOW);	
 }
 //==============================================================================
-void receptionDataDone(void)
+void receptionDataDone(uint32_t rxDataSize)
 {
 //	printf("Data has been read through packetHandler\r\n");
 	LED_BLUE_ON();
 	int8_t RSSI;
 	int8_t transmitPowerLevel;
 	int8_t powerLost;
+	
+	//
+//	printf("Recieved symbols: ");
+//	for(uint16_t i = 0; i < rxDataSize; i++)
+//	{
+//		printf("%c",phRxBuffer[i]);
+//	}
+//		printf("\r\n");
+	if(rxDataSize == 2)
+	{
+		printf("Print one more time: ");
+		for(uint16_t i = 0; i < 2; i++)
+		{
+			printf("%c",phRxBuffer[i]);
+		}
+		printf("\r\n");
+		if(phRxBuffer[1] == '0')
+		{
+			//comand: rssi test
+			if(phRxBuffer[0] == '1')
+			{
+				TestRSSI();
+			}
+			//comand: zeroing rssiTestNr
+			else if(phRxBuffer[0] == '2')
+			{
+				rssiTestNr = 0;
+			}	
+		}
+	}
+	
+	
 	
 //   uint16_t num_pkts;          /**< The number of received packets, valid or with CRC errors. */
 //   uint16_t num_crc_err;       /**< The number of packets received with CRC errors. */
@@ -1185,6 +1240,7 @@ void receptionDataDone(void)
 				 statisticPerConnection.num_crc_err,
 				 statisticPerConnection.num_evts,
 				 statisticPerConnection.num_miss_evts);
+	printf("%08d bytes received \r\n",rxDataSize);
 	allTimeStatistic.allPackets += statisticPerConnection.num_pkts;
 	allTimeStatistic.allBadCRCPackets += statisticPerConnection.num_crc_err;
 	allTimeStatistic.allTime += packetHandlerRxStatistic.timeSpent;
@@ -1196,7 +1252,6 @@ void receptionDataDone(void)
 	printf("Sum time:\t\t%020lld\r\n", allTimeStatistic.allTime);
 	printf("Lost connections:\t%020lld\r\n", allTimeStatistic.allConnectionLost);
 	printf("=========================================== \r\n");
-	
 	
 	
 		
@@ -1238,3 +1293,54 @@ void ConnDevListEntryDeliteByOrder(connDevList_t *list, uint8_t order)
 	list->nextElement--;		
 }
 //==============================================================================
+
+void TestRSSI(void)
+{
+	int8_t rssiArray[1000];
+	int32_t rssiAverage = 0;
+	uint16_t rssiGoodQuantity;
+	rssiAverage = 0;
+	rssiGoodQuantity = 0;
+//	int8_t RSSI;
+	printf("=====================================================================\r\n");
+	printf("| RSSI TEST NR. %03d                                                |\r\n",rssiTestNr);	
+	printf("=====================================================================\r\n");	
+	printf("====== RSSI TEST START ==============================================");
+	PA13_HIGH();	
+	for(uint16_t i = 0; i < 1000; i++)
+	{
+		hci_read_rssi(connDevList.connDev[0].connectionHandle, &rssiArray[i]);
+
+		
+		printf("%04d, ", rssiArray[i]);
+	}
+	PA13_LOW();
+	printf("\r\n");
+	//count good RSSI
+	for(uint16_t i = 0; i < 1000; i ++)
+		{
+			if(rssiArray[i] != 127)
+			{
+				rssiGoodQuantity++;
+				rssiAverage = rssiAverage + rssiArray[i];
+			}
+
+		}
+	rssiAverage = rssiAverage/rssiGoodQuantity;
+	printf("Bad RSSI: %06d\r\n", (1000 - rssiGoodQuantity));
+	printf("RSSI average value: %06d", rssiAverage);	
+	rssiTestNr++;
+	printf("====== RSSI TEST DONE ===============================================\r\n");
+	printf("=====================================================================\r\n");	
+}
+//==============================================================================
+void TestDataReceived(void)
+{
+	printf("=====================================================================\r\n");
+	printf("| DATA TEST NR. %03d                                             |\r\n",dataTestNr);
+	printf("=====================================================================\r\n");
+	printf("====== Data TEST START ==============================================");	
+}
+//==============================================================================
+
+//

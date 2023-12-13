@@ -34,7 +34,7 @@ statistic_t packetHandlerTxStatistic[STATISTIC_ARRAY_SIZE];
 //statistic_t packetHandlerRxStatistic[STATISTIC_ARRAY_SIZE];
 
 statisticData_t packetHandlerRxStatistic;
-
+uint16_t timeoutCounter = 0;
 
 //local function section
 void PacketHandlerPackDataPacket(uint8_t *payload, uint32_t time);
@@ -184,13 +184,20 @@ void PacketHandlerPackDataPacket(uint8_t *payload, uint32_t time)
 	}
 }
 //==============================================================================
-void PacketHandlerUnpackDataPacket(uint16_t packetLenght,
+void PacketHandlerUnpackDataPacket(uint16_t packetLength,
 																	 uint8_t packetData[],
 																	 uint8_t txDataBase[])
 {
 	//read packet number
 	uint16_t packetNr = (uint16_t)(packetData[0] << 8 ) + 
 	(uint16_t)packetData[1];
+	//zeroing data counter if zero (first) packet is getted
+	if(packetNr == 0)
+	{
+		rxData.rxDataCounter = 0;
+	}
+	//increment dataCounter
+	rxData.rxDataCounter = rxData.rxDataCounter + (packetLength - PACKET_INFO_SIZE);
 #ifdef DEBUGGING
 		
 #endif	//DEBUGGING
@@ -198,15 +205,15 @@ void PacketHandlerUnpackDataPacket(uint16_t packetLenght,
 	uint16_t packetQuantity = (uint16_t)(packetData[2] << 8) +
 	(uint16_t)packetData[3];
 	//calc data pointer offset
-	uint16_t dataBufferOffset = packetNr * (packetLenght - PACKET_INFO_SIZE);
+	uint16_t dataBufferOffset = packetNr * (packetLength - PACKET_INFO_SIZE);
 	//read payload	
-	for(uint16_t i = 0 ; i < packetLenght - PACKET_INFO_SIZE; i++)		
+	for(uint16_t i = 0 ; i < packetLength - PACKET_INFO_SIZE; i++)		
 	{
 		rxData.rxDataBufferBase[dataBufferOffset + i] = packetData[PACKET_INFO_SIZE + i];
 	}			
 	//write statistic
 	//write packet size
-	packetHandlerRxStatistic.statistic[packetNr].packetSize = packetLenght;
+	packetHandlerRxStatistic.statistic[packetNr].packetSize = packetLength;
 	//write timestamp
 	uint32_t time = (uint32_t)(packetData[PACKET_TIMESTAMP_POSITION] << 24) +
 	(uint32_t)(packetData[PACKET_TIMESTAMP_POSITION + 1] << 16) +
@@ -227,10 +234,11 @@ void PacketHandlerUnpackDataPacket(uint16_t packetLenght,
 	}	
 	packetHandlerRxStatistic.statistic[packetNr].packetTime = time;
 #ifdef DEBUGGING
-	printf("Unpack. pNr: %04d, pQ: %04d\r\n , pT: %010d\r\n",  
+printf("Unpacked. pNr: %04d, pQ: %04d , pT: %010d, pS:  %06d\r\n",  
 					packetNr, 
 					packetQuantity, 
-					time);				
+					time,
+					rxData.rxDataCounter);				
 		
 #endif //DEBUGGING		
 	//check for last packet
@@ -267,6 +275,7 @@ void aci_gatt_clt_indication_event(uint16_t Connection_Handle,
 		//check hte complition of message reception
 		if(rxData.rxDoneFlag == 1)
 		{
+			rxData.rxDataSize = rxData.rxDataCounter; 
 			cltState = CLT_RX_DONE;//go to the done receive state
 		}
 	}
@@ -287,6 +296,7 @@ void aci_gatt_clt_notification_event(uint16_t Connection_Handle,
 		PacketHandlerUnpackDataPacket(Attribute_Value_Length, Attribute_Value, rxData.rxDataBufferBase);
 		if(rxData.rxDoneFlag == 1)
 		{
+			rxData.rxDataSize = rxData.rxDataCounter; //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!			
 			cltState = CLT_RX_DONE;
 		}
 	LL_GPIO_WriteOutputPin(GPIOB, GPIO_BSRR_BS0, LL_GPIO_OUTPUT_LOW);
@@ -296,7 +306,7 @@ void aci_gatt_clt_notification_event(uint16_t Connection_Handle,
 void aci_gatt_srv_confirmation_event(uint16_t Connection_Handle)
 {
 #ifdef DEBUGGING
-	LL_GPIO_WriteOutputPin(GPIOA, GPIO_BSRR_BS13, LL_GPIO_OUTPUT_HIGH);
+//	LL_GPIO_WriteOutputPin(GPIOA, GPIO_BSRR_BS13, LL_GPIO_OUTPUT_HIGH);
 #endif //DEBUGGING
 if(srvState == SRV_WAIT_CONFIRMATION)
 	{
@@ -304,11 +314,11 @@ if(srvState == SRV_WAIT_CONFIRMATION)
 	srvState = SRV_START_INDICATION;	
 	}
 #ifdef DEBUGGING	
-	LL_GPIO_WriteOutputPin(GPIOA, GPIO_BSRR_BS13, LL_GPIO_OUTPUT_LOW);
+//	LL_GPIO_WriteOutputPin(GPIOA, GPIO_BSRR_BS13, LL_GPIO_OUTPUT_LOW);
 #endif //DEBUGGING	
 #ifdef PRINTF_DISABLE
 	printf("====aci_gatt_srv_confirmation_event() callback");
-	LL_GPIO_WriteOutputPin(GPIOA, GPIO_BSRR_BS13, LL_GPIO_OUTPUT_LOW);
+//	LL_GPIO_WriteOutputPin(GPIOA, GPIO_BSRR_BS13, LL_GPIO_OUTPUT_LOW);
 #endif //PRINTF_DISABLE
 }
 //==============================================================================
@@ -353,7 +363,7 @@ void PacketHandlerNotificationSrvFSM(void)
 		//&&(txData.txLastPacketSize != 0))
 		else
 		{
-			//attempt to send lat short data packet
+			//attempt to send lats short data packet
 			LL_GPIO_WriteOutputPin(GPIOB, GPIO_BSRR_BS0, LL_GPIO_OUTPUT_HIGH);					
 			status = aci_gatt_srv_notify(packetHandlerSettings.connectionHandle,
 																	packetHandlerSettings.characteristicHandle + 1,
@@ -417,7 +427,7 @@ void PacketHandlerNotificationCltFSM(void)
 		//PacketHandlerRxDoneCb();
 		if(packetHandlerSettings.cltReceptionDoneCb != NULL)
 		{
-			packetHandlerSettings.cltReceptionDoneCb();
+			packetHandlerSettings.cltReceptionDoneCb(rxData.rxDataSize);
 		}
 		cltState = CLT_WAIT_NOTIFICATION;
 	}
@@ -434,20 +444,22 @@ void PacketHandlerIndicationCltFSM(void)
 	{
 		rxData.rxDoneFlag = 0;	
 		//Call callback and go to the client wait indication state again
-		packetHandlerSettings.cltReceptionDoneCb();
+		packetHandlerSettings.cltReceptionDoneCb(rxData.rxDataSize);
 		cltState = CLT_WAIT_INDICATION;
 	}
 }
 //==============================================================================
 void PacketHandlerIndicationSrvFSM(void)
 {
+	uint8_t status;
 	if(srvState == SRV_IDLE)
 	{
 		return;
 	}
 	//==========
 	if(srvState == SRV_START_INDICATION)
-	{			
+	{
+		LED_BLUE_ON();
 		//all packets has been transmitted - go to SRV_TX_DONE
 		if(txData.txPacketCounter > txData.txPacketQuantity)//last packet !!!!	
 		{
@@ -456,22 +468,24 @@ void PacketHandlerIndicationSrvFSM(void)
 			return;
 		}
 		//calculate new data offset for sending
-		uint8_t *txDataOffset = txData.txDataBase +
-		txData.txPayloadSize * txData.txPacketCounter;//!!!!!!!!!!!!!!!!!!!!
+		uint8_t *txDataOffset = txData.txDataBase + txData.txPayloadSize * txData.txPacketCounter;
+//		printf("================================\r\n");
+//		printf("txPacketCounter: %03d\r\n", txData.txPacketCounter);
+//		printf("txPayloadSize: %05d\r\n", txData.txPayloadSize);
+//		printf("********txDataOffset: 0x%010x\r\n", txDataOffset);
 		//make the data packet with info data and payload
 		uint32_t currentTime = Clock_Time();
 		PacketHandlerPackDataPacket(txDataOffset , currentTime);				
-		uint8_t status;
-		//attempt to send data packet
-		/*test for penultimate data packet*/
+
 		//if(txData.txPacketCounter < txData.txPacketQuantity)
 		uint8_t notLastPacket = (txData.txPacketCounter < txData.txPacketQuantity); 
-		if((txData.txLastPacketSize == 0) || ((txData.txLastPacketSize != 0) && (notLastPacket)))	
+		if((txData.txLastPacketSize == 0) || ((txData.txLastPacketSize != 0) && (notLastPacket)))
+		//not last packet
 		{
-			//attempt to send data packet
 #ifdef DEBUGGING
 			LL_GPIO_WriteOutputPin(GPIOB, GPIO_BSRR_BS0, LL_GPIO_OUTPUT_HIGH);
 #endif //DEBUGGING
+			
 			status = aci_gatt_srv_notify(packetHandlerSettings.connectionHandle,
 																	packetHandlerSettings.characteristicHandle + 1,
 																	INDICATION,
@@ -482,6 +496,7 @@ void PacketHandlerIndicationSrvFSM(void)
 		}	
 		//else if ((txData.txPacketCounter == txData.txPacketQuantity)
 		//&&(txData.txLastPacketSize != 0))
+		//last packet
 		else
 		{
 			//attempt to send lat short data packet
@@ -490,7 +505,7 @@ void PacketHandlerIndicationSrvFSM(void)
 #endif //DEBUGGING
 			status = aci_gatt_srv_notify(packetHandlerSettings.connectionHandle,
 																	packetHandlerSettings.characteristicHandle + 1,
-																	NOTIFICATION,
+																	INDICATION,
 																	txData.txLastPacketSize, &txData.txPacketArray[0]);
 #ifdef DEBUGGING				
 			LL_GPIO_WriteOutputPin(GPIOB, GPIO_BSRR_BS0, LL_GPIO_OUTPUT_LOW);
@@ -516,17 +531,19 @@ void PacketHandlerIndicationSrvFSM(void)
 		}
 		else
 		{
-			printf("Function: aci_gatt_srv_notify() Status code: 0x%02x\r\n",status);
+			//printf("Function: aci_gatt_srv_notify() Status code: 0x%02x\r\n",status);
 		}
 	}
 	//==========
 	if(srvState == SRV_WAIT_CONFIRMATION)
 	{
+		LED_BLUE_OFF();
 		return;//wait confirmation event from client to unlock next indication
 	}
 	//==========
 	if(srvState == SRV_TX_DONE)
 	{
+		LED_BLUE_OFF();
 #ifdef DEBUGGING
 		printf("SRV_TX_DONE\r\n");
 #endif	//DEBUGGING	
@@ -545,7 +562,7 @@ void PacketHandlerTxDoneSetCallback(void (*callbackFunction)(void))
 	packetHandlerSettings.srvTransmissionDoneCb = callbackFunction;
 }
 //==============================================================================
-void PacketHandlerRxDoneSetCallback(void (*callbackFunction)(void))
+void PacketHandlerRxDoneSetCallback(void (*callbackFunction)(uint32_t))
 {
 	packetHandlerSettings.cltReceptionDoneCb = callbackFunction;
 }

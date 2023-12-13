@@ -27,7 +27,8 @@ typedef enum {SRV_IDLE = 0,
 							SRV_WAIT_CONFIRMATION,		//for indication
 							SRV_TX_DONE,							//for indication and confirmation		
 							SRV_START_NOTIFICATION,		//for notification
-							SRV_LOCK_NOTIFICATION			//for notification
+							SRV_LOCK_NOTIFICATION,		//for notification
+							SRV_HOLD
 							} srvState_t;
 //struct for server
 typedef struct
@@ -48,6 +49,8 @@ typedef struct
 	uint8_t *rxDataBufferBase; //USED
 	//	uint8_t rxBufferSize; //USED
 	uint8_t rxDoneFlag;
+	uint32_t rxDataCounter;
+	uint32_t rxDataSize;			//size of recieved 
 } rxData_t;
 
 typedef struct
@@ -56,7 +59,7 @@ typedef struct
 	uint16_t characteristicHandle;//USED
 	cltOrServer_t cltOrSrv;// USED
 	notificationType_t notificationType; //USED
-	void (*cltReceptionDoneCb)(void);	//USED
+	void (*cltReceptionDoneCb)(uint32_t rxDataSize);	//USED
 	void (*srvTransmissionDoneCb)(void);//USED
 }packetHandlerSettings_t;
 //for statistic
@@ -98,7 +101,7 @@ uint8_t PacketHandlerSend(packetHandlerSettings_t *packetHandlerSettings,
 
 void PacketHandlerTxDoneSetCallback(void (*callbackFunction)(void));
 
-void PacketHandlerRxDoneSetCallback(void (*callbackFunction)(void));
+void PacketHandlerRxDoneSetCallback(void (*callbackFunction)(uint32_t));
 void PacketHandlerSetRxBuffer(uint8_t *rxBuffer);
 
 //server --- add service data
